@@ -2,25 +2,21 @@ name: Manga Tracker
 
 on:
   schedule:
-    - cron: "0 1 * * *"
+    - cron: '0 */6 * * *'
   workflow_dispatch:
 
 jobs:
   check-manga-updates:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
 
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 1
+        uses: actions/checkout@v3
 
       - name: Setup Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v4
         with:
-          python-version: "3.11"
+          python-version: '3.10'
 
       - name: Install dependencies
         run: pip install requests beautifulsoup4
@@ -28,6 +24,7 @@ jobs:
       - name: Run manga tracker
         env:
           LINE_CHANNEL_ACCESS_TOKEN: ${{ secrets.LINE_CHANNEL_ACCESS_TOKEN }}
+          LINE_USER_ID: ${{ secrets.LINE_USER_ID }}
         run: python manga_tracker.py
 
       - name: Commit updated state
