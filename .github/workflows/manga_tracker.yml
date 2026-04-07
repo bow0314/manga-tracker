@@ -34,3 +34,4 @@ jobs:
           git add manga_state.json
           git diff --cached --quiet || git commit -m "chore: update manga state [skip ci]"
           git push
+
