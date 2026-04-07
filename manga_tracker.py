@@ -1,7 +1,6 @@
 """
 manga_tracker.py - 追蹤 manhuagui.com 指定漫畫更新，有新章節時透過 LINE 推播通知
 """
-
 import os
 import json
 import requests
@@ -20,7 +19,7 @@ WATCHLIST = [
 
 UPDATE_URL   = "https://tw.manhuagui.com/update/"
 STATE_FILE   = "manga_state.json"
-LINE_API_URL = "https://api.line.me/v2/bot/message/broadcast"
+LINE_API_URL = "https://api.line.me/v2/bot/message/push"
 
 def fetch_updates():
     headers = {"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"}
@@ -79,8 +78,12 @@ def find_new_updates(updates, state):
 
 def send_line_notification(new_items):
     token = os.environ.get("LINE_CHANNEL_ACCESS_TOKEN")
+    user_id = os.environ.get("LINE_USER_ID")
     if not token:
         print("[LINE] 未設定 LINE_CHANNEL_ACCESS_TOKEN，跳過推播")
+        return
+    if not user_id:
+        print("[LINE] 未設定 LINE_USER_ID，跳過推播")
         return
     bubbles = []
     for item in new_items:
@@ -92,17 +95,21 @@ def send_line_notification(new_items):
             "body": {"type": "box", "layout": "vertical", "contents": [
                 {"type": "text", "text": item["title"], "weight": "bold", "size": "md", "wrap": True},
                 {"type": "text", "text": item["chapter"], "size": "sm", "color": "#555555", "margin": "sm", "wrap": True},
-                {"type": "text", "text": "date: " + item["date"], "size": "xs", "color": "#aaaaaa", "margin": "sm"}]},
+                {"type": "text", "text": "更新日期：" + item["date"], "size": "xs", "color": "#aaaaaa", "margin": "sm"}]},
             "footer": {"type": "box", "layout": "vertical",
                 "contents": [{"type": "button", "style": "primary",
                     "action": {"type": "uri", "label": "立即閱讀", "uri": item["url"]},
                     "color": "#3D7EAA", "height": "sm"}]}
         })
-    message = {"type": "flex", "altText": f"{len(new_items)} 部漫畫有新章節！",
-                "contents": {"type": "carousel", "contents": bubbles[:12]}}
+    message = {
+        "type": "flex",
+        "altText": f"{len(new_items)} 部漫畫有新章節！",
+        "contents": {"type": "carousel", "contents": bubbles[:12]}
+    }
     headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+    payload = {"to": user_id, "messages": [message]}
     resp = requests.post(LINE_API_URL, headers=headers,
-                         data=json.dumps(message, ensure_ascii=False).encode("utf-8"), timeout=15)
+                         data=json.dumps(payload, ensure_ascii=False).encode("utf-8"), timeout=15)
     if resp.status_code == 200:
         print(f"[LINE] 推播成功！通知了 {len(new_items)} 部漫畫更新")
     else:
