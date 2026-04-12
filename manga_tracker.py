@@ -1,5 +1,5 @@
 """
-manga_tracker.py - 追蹤 manhuagui.com 指定漫畫更新，有新章節時透過 LINE 推播通知
+manga_tracker.py – 追蹤 manhuagui.com 指定漫畫更新，有新章節時透過 LINE 和 Telegram 推播通知
 """
 import os
 import json
@@ -12,14 +12,20 @@ WATCHLIST = [
     "陰陽眼見子",
     "无职转生",
     "關於我轉生後成為史萊姆的那件事",
-    "超自然武裝噹噠噹",
+    "超自然武裝噹噹噹",
     "轉生精靈精通魔法後踏上旅程，因為長壽而成為活生生的傳說",
     "XXXHOLiC•戾",
 ]
 
-UPDATE_URL   = "https://tw.manhuagui.com/update/"
-STATE_FILE   = "manga_state.json"
-LINE_API_URL = "https://api.line.me/v2/bot/message/push"
+UPDATE_URL    = "https://tw.manhuagui.com/update/"
+STATE_FILE    = "manga_state.json"
+LINE_API_URL  = "https://api.line.me/v2/bot/message/push"
+
+LINE_TOKEN       = os.environ["LINE_CHANNEL_ACCESS_TOKEN"]
+LINE_USER_ID     = os.environ["LINE_USER_ID"]
+TELEGRAM_TOKEN   = os.environ["TELEGRAM_BOT_TOKEN"]
+TELEGRAM_CHAT_ID = os.environ["TELEGRAM_CHAT_ID"]
+
 
 def fetch_updates():
     headers = {"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"}
@@ -54,16 +60,19 @@ def fetch_updates():
     print(f"[爬蟲] 本次共抓到 {len(updates)} 部漫畫更新")
     return updates
 
+
 def load_state():
     if os.path.exists(STATE_FILE):
         with open(STATE_FILE, "r", encoding="utf-8") as f:
             return json.load(f)
     return {}
 
+
 def save_state(state):
     with open(STATE_FILE, "w", encoding="utf-8") as f:
         json.dump(state, f, ensure_ascii=False, indent=2)
     print(f"[狀態] 已更新 {STATE_FILE}")
+
 
 def find_new_updates(updates, state):
     new_items = []
@@ -73,62 +82,62 @@ def find_new_updates(updates, state):
         info = updates[manga]
         last_chapter = state.get(manga, {}).get("chapter", "")
         if info["chapter"] != last_chapter:
-            new_items.append({"title": manga, "chapter": info["chapter"], "url": info["url"], "date": info["date"]})
+            new_items.append({
+                "title": manga,
+                "chapter": info["chapter"],
+                "url": info["url"],
+                "date": info["date"],
+            })
     return new_items
 
-def send_line_notification(new_items):
-    token = os.environ.get("LINE_CHANNEL_ACCESS_TOKEN")
-    user_id = os.environ.get("LINE_USER_ID")
-    if not token:
-        print("[LINE] 未設定 LINE_CHANNEL_ACCESS_TOKEN，跳過推播")
-        return
-    if not user_id:
-        print("[LINE] 未設定 LINE_USER_ID，跳過推播")
-        return
-    bubbles = []
-    for item in new_items:
-        bubbles.append({
-            "type": "bubble", "size": "kilo",
-            "header": {"type": "box", "layout": "vertical",
-                "contents": [{"type": "text", "text": "漫畫更新通知", "weight": "bold", "color": "#ffffff", "size": "sm"}],
-                "backgroundColor": "#3D7EAA", "paddingAll": "10px"},
-            "body": {"type": "box", "layout": "vertical", "contents": [
-                {"type": "text", "text": item["title"], "weight": "bold", "size": "md", "wrap": True},
-                {"type": "text", "text": item["chapter"], "size": "sm", "color": "#555555", "margin": "sm", "wrap": True},
-                {"type": "text", "text": "更新日期：" + item["date"], "size": "xs", "color": "#aaaaaa", "margin": "sm"}]},
-            "footer": {"type": "box", "layout": "vertical",
-                "contents": [{"type": "button", "style": "primary",
-                    "action": {"type": "uri", "label": "立即閱讀", "uri": item["url"]},
-                    "color": "#3D7EAA", "height": "sm"}]}
-        })
-    message = {
-        "type": "flex",
-        "altText": f"{len(new_items)} 部漫畫有新章節！",
-        "contents": {"type": "carousel", "contents": bubbles[:12]}
-    }
-    headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
-    payload = {"to": user_id, "messages": [message]}
-    resp = requests.post(LINE_API_URL, headers=headers,
-                         data=json.dumps(payload, ensure_ascii=False).encode("utf-8"), timeout=15)
-    if resp.status_code == 200:
-        print(f"[LINE] 推播成功！通知了 {len(new_items)} 部漫畫更新")
-    else:
-        print(f"[LINE] 推播失敗：{resp.status_code} {resp.text}")
 
-def main():
-    print(f"[開始] {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} 漫畫更新檢查")
-    updates = fetch_updates()
-    state = load_state()
-    new_items = find_new_updates(updates, state)
-    if not new_items:
-        print("[結果] 追蹤清單中沒有新章節，靜默結束")
+def send_line(message):
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {LINE_TOKEN}",
+    }
+    payload = {
+        "to": LINE_USER_ID,
+        "messages": [{"type": "text", "text": message}],
+    }
+    resp = requests.post(LINE_API_URL, headers=headers, json=payload)
+    if resp.status_code == 200:
+        print("LINE 推播成功！")
     else:
-        print(f"[結果] 發現 {len(new_items)} 部有更新")
-        send_line_notification(new_items)
-        for item in new_items:
-            state[item["title"]] = {"chapter": item["chapter"], "url": item["url"], "date": item["date"]}
-        save_state(state)
-    print("[完成] 執行結束")
+        print(f"LINE 推播失敗：{resp.status_code} {resp.text}")
+
+
+def send_telegram(message):
+    api_url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
+    for chunk in [message[i:i+4000] for i in range(0, len(message), 4000)]:
+        payload = {"chat_id": TELEGRAM_CHAT_ID, "text": chunk}
+        resp = requests.post(api_url, json=payload)
+        if resp.status_code == 200:
+            print("Telegram 推播成功！")
+        else:
+            print(f"Telegram 推播失敗：{resp.status_code} {resp.text}")
+
 
 if __name__ == "__main__":
-    main()
+    state = load_state()
+    updates = fetch_updates()
+    new_items = find_new_updates(updates, state)
+
+    if not new_items:
+        print("沒有新章節更新")
+    else:
+        lines = ["📚 漫畫更新通知\n"]
+        for item in new_items:
+            lines.append(f"📖 {item['title']}")
+            lines.append(f"{item['chapter']}")
+            lines.append(f"{item['url']}\n")
+            state[item["title"]] = {
+                "chapter": item["chapter"],
+                "url": item["url"],
+                "date": item["date"],
+            }
+        message = "\n".join(lines).strip()
+        print(message)
+        send_line(message)
+        send_telegram(message)
+        save_state(state)
