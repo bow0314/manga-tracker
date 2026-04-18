@@ -1,5 +1,5 @@
 """
-manga_tracker.py – 追蹤 manhuagui.com 指定漫畫更新，有新章節時透過 LINE 和 Telegram 推播通知
+manga_tracker.py – 追蹤 manhuagui.com 指定漫畫更新，有新章節時透過 LINE 推播通知
 """
 import os
 import json
@@ -23,8 +23,6 @@ LINE_API_URL  = "https://api.line.me/v2/bot/message/push"
 
 LINE_TOKEN       = os.environ["LINE_CHANNEL_ACCESS_TOKEN"]
 LINE_USER_ID     = os.environ["LINE_USER_ID"]
-TELEGRAM_TOKEN   = os.environ["TELEGRAM_BOT_TOKEN"]
-TELEGRAM_CHAT_ID = os.environ["TELEGRAM_CHAT_ID"]
 
 
 def fetch_updates():
@@ -107,17 +105,6 @@ def send_line(message):
         print(f"LINE 推播失敗：{resp.status_code} {resp.text}")
 
 
-def send_telegram(message):
-    api_url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
-    for chunk in [message[i:i+4000] for i in range(0, len(message), 4000)]:
-        payload = {"chat_id": TELEGRAM_CHAT_ID, "text": chunk}
-        resp = requests.post(api_url, json=payload)
-        if resp.status_code == 200:
-            print("Telegram 推播成功！")
-        else:
-            print(f"Telegram 推播失敗：{resp.status_code} {resp.text}")
-
-
 if __name__ == "__main__":
     state = load_state()
     updates = fetch_updates()
@@ -139,5 +126,4 @@ if __name__ == "__main__":
         message = "\n".join(lines).strip()
         print(message)
         send_line(message)
-        send_telegram(message)
         save_state(state)
